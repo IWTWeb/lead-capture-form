@@ -2,6 +2,8 @@
 <html>
 <head>
   <title>Customer Lead Form</title>
+  <script src="https://cdn.jsdelivr.net/npm/oauth-1.0a@2.2.6/oauth-1.0a.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/crypto-js@4.1.1/crypto-js.min.js"></script>
 </head>
 <body>
   <h2>Customer Lead Form</h2>
@@ -12,7 +14,7 @@
     <label>Company: <input name="company"></label><br>
     <label>Interested in Becoming a Dealer?
       <select name="dealerInterest">
-        <option value="">--Select--</option>
+        <option value=""></option>
         <option value="T">Yes</option>
         <option value="F">No</option>
       </select>
@@ -22,45 +24,42 @@
     <label>State: <input name="state"></label><br>
     <label>Zip: <input name="zip"></label><br>
 
-<h3>Froilabo Categories</h3>
-<div>
-  <label><input type="checkbox" name="froilaboCategories" value="Ultra Low Temperature Freezers (-86°C)"> Ultra Low Temperature Freezers (-86°C)</label><br>
-  <label><input type="checkbox" name="froilaboCategories" value="Low Temperature Freezers"> Low Temperature Freezers</label><br>
-  <label><input type="checkbox" name="froilaboCategories" value="Blast Freezers"> Blast Freezers</label><br>
-  <label><input type="checkbox" name="froilaboCategories" value="Laboratory Refrigerators"> Laboratory Refrigerators</label><br>
-  <label><input type="checkbox" name="froilaboCategories" value="Temperature Forcing Systems"> Temperature Forcing Systems</label><br>
-  <label><input type="checkbox" name="froilaboCategories" value="Incubators"> Incubators</label><br>
-  <label><input type="checkbox" name="froilaboCategories" value="Laboratory Ovens"> Laboratory Ovens</label><br>
-  <label><input type="checkbox" name="froilaboCategories" value="Climatic Chambers"> Climatic Chambers</label><br>
-  <label><input type="checkbox" name="froilaboCategories" value="Water Baths"> Water Baths</label>
-</div>
+    <h3>Froilabo Categories</h3>
+    <div>
+      <label><input type="checkbox" name="froilaboCategories" value="Ultra Low Temperature Freezers (-86°C)"> Ultra Low Temperature Freezers (-86°C)</label><br>
+      <label><input type="checkbox" name="froilaboCategories" value="Low Temperature Freezers"> Low Temperature Freezers</label><br>
+      <label><input type="checkbox" name="froilaboCategories" value="Blast Freezers"> Blast Freezers</label><br>
+      <label><input type="checkbox" name="froilaboCategories" value="Laboratory Refrigerators"> Laboratory Refrigerators</label><br>
+      <label><input type="checkbox" name="froilaboCategories" value="Temperature Forcing Systems"> Temperature Forcing Systems</label><br>
+      <label><input type="checkbox" name="froilaboCategories" value="Incubators"> Incubators</label><br>
+      <label><input type="checkbox" name="froilaboCategories" value="Laboratory Ovens"> Laboratory Ovens</label><br>
+      <label><input type="checkbox" name="froilaboCategories" value="Climatic Chambers"> Climatic Chambers</label><br>
+      <label><input type="checkbox" name="froilaboCategories" value="Water Baths"> Water Baths</label>
+    </div>
 
-<h3>Precisa Categories</h3>
-<div>
-  <label><input type="checkbox" name="precisaCategories" value="Laboratory Weighing"> Laboratory Weighing</label><br>
-  <label><input type="checkbox" name="precisaCategories" value="Industrial Weighing"> Industrial Weighing</label><br>
-  <label><input type="checkbox" name="precisaCategories" value="Moisture Analyzers"> Moisture Analyzers</label><br>
-  <label><input type="checkbox" name="precisaCategories" value="Ash Analyzers"> Ash Analyzers</label>
-</div>
+    <h3>Precisa Categories</h3>
+    <div>
+      <label><input type="checkbox" name="precisaCategories" value="Laboratory Weighing"> Laboratory Weighing</label><br>
+      <label><input type="checkbox" name="precisaCategories" value="Industrial Weighing"> Industrial Weighing</label><br>
+      <label><input type="checkbox" name="precisaCategories" value="Moisture Analyzers"> Moisture Analyzers</label><br>
+      <label><input type="checkbox" name="precisaCategories" value="Ash Analyzers"> Ash Analyzers</label>
+    </div>
 
     <button type="submit">Submit</button>
   </form>
 
   <div id="result"></div>
 
+  <!-- 🔽 JavaScript handler placed at bottom -->
   <script>
-    const form = document.getElementById('leadForm');
-    const result = document.getElementById('result');
-
-    form.addEventListener('submit', async (e) => {
+    document.getElementById('leadForm').addEventListener('submit', async function (e) {
       e.preventDefault();
 
-      const data = new FormData(form);
-      const froilabo = [...data.getAll('froilabo')];
-      const precisa = [...data.getAll('precisa')];
+      const data = new FormData(this);
 
       const body = {
-        name: data.get('name'),
+        firstname: data.get('firstname'),
+        lastname: data.get('lastname'),
         email: data.get('email'),
         company: data.get('company'),
         dealerInterest: data.get('dealerInterest'),
@@ -68,26 +67,52 @@
         city: data.get('city'),
         state: data.get('state'),
         zip: data.get('zip'),
-        froilaboCategories: froilabo,
-        precisaCategories: precisa
+        froilaboCategories: data.getAll('froilaboCategories'),
+        precisaCategories: data.getAll('precisaCategories')
       };
 
+      const accountId = 'YOUR_ACCOUNT_ID'; // e.g., 1234567_SB1
+      const restletUrl = `https://${accountId.toLowerCase()}.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=XXX&deploy=1`;
+
+      const oauth = OAuth({
+        consumer: {
+          key: 'YOUR_CONSUMER_KEY',
+          secret: 'YOUR_CONSUMER_SECRET'
+        },
+        signature_method: 'HMAC-SHA256',
+        hash_function(base_string, key) {
+          return CryptoJS.HmacSHA256(base_string, key).toString(CryptoJS.enc.Base64);
+        }
+      });
+
+      const token = {
+        key: 'YOUR_TOKEN_ID',
+        secret: 'YOUR_TOKEN_SECRET'
+      };
+
+      const requestData = {
+        url: restletUrl,
+        method: 'POST',
+        data: body
+      };
+
+      const headers = oauth.toHeader(oauth.authorize(requestData, token));
+      headers['Content-Type'] = 'application/json';
+
       try {
-        const response = await fetch('https://<ACCOUNT>.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=XXX&deploy=1', {
+        const response = await fetch(restletUrl, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'NLAuth nlauth_account=XXXX, nlauth_email=XXX@yourdomain.com, nlauth_signature=XXX, nlauth_role=XXX'
-          },
+          headers: headers,
           body: JSON.stringify(body)
         });
 
         const resultData = await response.json();
-        result.innerText = resultData.success ? 'Lead submitted!' : 'Error: ' + resultData.message;
-
-      } catch (err) {
-        console.error(err);
-        result.innerText = 'Failed to submit form.';
+        document.getElementById('result').innerText = resultData.success
+          ? 'Lead submitted successfully!'
+          : 'Error: ' + resultData.message;
+      } catch (error) {
+        console.error(error);
+        document.getElementById('result').innerText = 'Submission failed.';
       }
     });
   </script>
