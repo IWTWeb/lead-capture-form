@@ -21,13 +21,28 @@
     <label>State: <input name="state"></label><br>
     <label>Zip: <input name="zip"></label><br>
 
-    <h3>Froilabo Categories</h3>
-    <label><input type="checkbox" name="froilabo" value="Ultra Low Temperature Freezers (-86°C)"> ULT Freezers</label><br>
-    <label><input type="checkbox" name="froilabo" value="Incubators"> Incubators</label><br>
+<h3>Froilabo Categories</h3>
+<select name="froilaboCategory">
+  <option value="">-- Select a Category --</option>
+  <option value="Ultra Low Temperature Freezers (-86°C)">Ultra Low Temperature Freezers (-86°C)</option>
+  <option value="Low Temperature Freezers">Low Temperature Freezers</option>
+  <option value="Blast Freezers">Blast Freezers</option>
+  <option value="Laboratory Refrigerators">Laboratory Refrigerators</option>
+  <option value="Temperature Forcing Systems">Temperature Forcing Systems</option>
+  <option value="Incubators">Incubators</option>
+  <option value="Laboratory Ovens">Laboratory Ovens</option>
+  <option value="Climatic Chambers">Climatic Chambers</option>
+  <option value="Water Baths">Water Baths</option>
+</select>
 
-    <h3>Precisa Categories</h3>
-    <label><input type="checkbox" name="precisa" value="Laboratory Weighing"> Laboratory Weighing</label><br>
-    <label><input type="checkbox" name="precisa" value="Moisture Analyzers"> Moisture Analyzers</label><br>
+<h3>Precisa Categories</h3>
+<select name="precisaCategory">
+  <option value="">-- Select a Category --</option>
+  <option value="Laboratory Weighing">Laboratory Weighing</option>
+  <option value="Industrial Weighing">Industrial Weighing</option>
+  <option value="Moisture Analyzers">Moisture Analyzers</option>
+  <option value="Ash Analyzers">Ash Analyzers</option>
+</select>
 
     <button type="submit">Submit</button>
   </form>
