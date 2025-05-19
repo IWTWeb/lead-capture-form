@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Customer Lead Form</title>
+</head>
+<body>
+  <h2>Customer Lead Form</h2>
+  <form id="leadForm">
+    <label>Name: <input name="name" required></label><br>
+    <label>Email: <input name="email" type="email" required></label><br>
+    <label>Company: <input name="company"></label><br>
+    <label>Interested in Becoming a Dealer?
+      <select name="dealerInterest">
+        <option value="">--Select--</option>
+        <option value="T">Yes</option>
+        <option value="F">No</option>
+      </select>
+    </label><br>
+    <label>Address: <input name="address"></label><br>
+    <label>City: <input name="city"></label><br>
+    <label>State: <input name="state"></label><br>
+    <label>Zip: <input name="zip"></label><br>
+
+    <h3>Froilabo Categories</h3>
+    <label><input type="checkbox" name="froilabo" value="Ultra Low Temperature Freezers (-86°C)"> ULT Freezers</label><br>
+    <label><input type="checkbox" name="froilabo" value="Incubators"> Incubators</label><br>
+
+    <h3>Precisa Categories</h3>
+    <label><input type="checkbox" name="precisa" value="Laboratory Weighing"> Laboratory Weighing</label><br>
+    <label><input type="checkbox" name="precisa" value="Moisture Analyzers"> Moisture Analyzers</label><br>
+
+    <button type="submit">Submit</button>
+  </form>
+
+  <div id="result"></div>
+
+  <script>
+    const form = document.getElementById('leadForm');
+    const result = document.getElementById('result');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const data = new FormData(form);
+      const froilabo = [...data.getAll('froilabo')];
+      const precisa = [...data.getAll('precisa')];
+
+      const body = {
+        name: data.get('name'),
+        email: data.get('email'),
+        company: data.get('company'),
+        dealerInterest: data.get('dealerInterest'),
+        address: data.get('address'),
+        city: data.get('city'),
+        state: data.get('state'),
+        zip: data.get('zip'),
+        froilaboCategories: froilabo,
+        precisaCategories: precisa
+      };
+
+      try {
+        const response = await fetch('https://<ACCOUNT>.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=XXX&deploy=1', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'NLAuth nlauth_account=XXXX, nlauth_email=XXX@yourdomain.com, nlauth_signature=XXX, nlauth_role=XXX'
+          },
+          body: JSON.stringify(body)
+        });
+
+        const resultData = await response.json();
+        result.innerText = resultData.success ? 'Lead submitted!' : 'Error: ' + resultData.message;
+
+      } catch (err) {
+        console.error(err);
+        result.innerText = 'Failed to submit form.';
+      }
+    });
+  </script>
+</body>
+</html>
