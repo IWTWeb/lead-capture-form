@@ -20,6 +20,17 @@ const oauth = new OAuth({
 });
 
 export default async function handler(req, res) {
+  // Set CORS headers for all responses
+  res.setHeader('Access-Control-Allow-Origin', '*'); // Or specify your domain
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    // Respond to preflight request
+    res.status(200).end();
+    return;
+  }
+
   if (req.method !== 'POST') {
     res.status(405).json({ message: 'Method Not Allowed' });
     return;
@@ -53,7 +64,6 @@ export default async function handler(req, res) {
 
     const nsResult = await nsResponse.json();
     res.status(200).json(nsResult);
-
   } catch (error) {
     console.error('Error proxying request:', error);
     res.status(500).json({ message: 'Internal Server Error', error: error.message });
