@@ -2,17 +2,6 @@ import crypto from 'crypto';
 import OAuth from 'oauth-1.0a';
 import fetch from 'node-fetch';
 
-// Log env variables for debugging (remove after testing)
-console.log('ENV VARIABLES:', {
-  NETSUITE_ACCOUNT: process.env.NETSUITE_ACCOUNT,
-  CONSUMER_KEY: process.env.CONSUMER_KEY,
-  CONSUMER_SECRET: process.env.CONSUMER_SECRET,
-  TOKEN_ID: process.env.TOKEN_ID,
-  TOKEN_SECRET: process.env.TOKEN_SECRET,
-  RESTLET_SCRIPT_ID: process.env.RESTLET_SCRIPT_ID,
-  RESTLET_DEPLOY_ID: process.env.RESTLET_DEPLOY_ID,
-});
-
 const NETSUITE_ACCOUNT = process.env.NETSUITE_ACCOUNT;
 const CONSUMER_KEY = process.env.CONSUMER_KEY;
 const CONSUMER_SECRET = process.env.CONSUMER_SECRET;
@@ -31,35 +20,29 @@ const oauth = new OAuth({
 });
 
 export default async function handler(req, res) {
-  console.log(`Incoming request method: ${req.method}`);
-
-  // Set CORS headers for all responses
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') {
-    console.log('Handling OPTIONS preflight request');
     res.status(200).end();
     return;
   }
 
   if (req.method !== 'POST') {
-    console.log(`Method ${req.method} not allowed`);
     res.status(405).json({ message: 'Method Not Allowed' });
     return;
   }
 
-  console.log('Handling POST request');
-  console.log('Request body:', req.body);
+  console.log("🔍 Incoming request method:", req.method);
+  console.log("📦 Request body:", JSON.stringify(req.body, null, 2));
 
   try {
-    const url = `https://${NETSUITE_ACCOUNT.toLowerCase()}.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=${RESTLET_SCRIPT_ID}&deploy=${RESTLET_DEPLOY_ID}`;
-
-    console.log('NetSuite RESTlet URL:', url);
+    const requestUrl = `https://${NETSUITE_ACCOUNT.toLowerCase()}.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=${RESTLET_SCRIPT_ID}&deploy=${RESTLET_DEPLOY_ID}`;
+    console.log("🌐 NetSuite RESTlet URL:", requestUrl);
 
     const request_data = {
-      url,
+      url: requestUrl,
       method: 'POST',
       data: req.body,
     };
@@ -69,33 +52,39 @@ export default async function handler(req, res) {
       secret: TOKEN_SECRET,
     };
 
-    console.log('Generating OAuth header...');
+    console.log("🔑 Auth Values:");
+    console.log("  - Account:", NETSUITE_ACCOUNT);
+    console.log("  - Consumer Key:", CONSUMER_KEY);
+    console.log("  - Consumer Secret:", CONSUMER_SECRET ? '✅ (set)' : '❌ (missing)');
+    console.log("  - Token ID:", TOKEN_ID);
+    console.log("  - Token Secret:", TOKEN_SECRET ? '✅ (set)' : '❌ (missing)');
+
+    console.log("🔐 Generating OAuth header...");
     const headers = oauth.toHeader(oauth.authorize(request_data, token));
     headers['Content-Type'] = 'application/json';
 
-    console.log('OAuth headers:', headers);
+    console.log("📤 OAuth headers:", headers);
 
-    console.log('Sending request to NetSuite...');
+    console.log("🚀 Sending request to NetSuite...");
     const nsResponse = await fetch(request_data.url, {
       method: 'POST',
       headers,
       body: JSON.stringify(req.body),
     });
 
-    console.log('Received response from NetSuite');
-    const responseText = await nsResponse.text();
-
+    console.log("📥 Received response from NetSuite");
     if (!nsResponse.ok) {
-      console.error(`NetSuite responded with status ${nsResponse.status}`);
-      console.error('Response body:', responseText);
-      throw new Error(`NetSuite error: ${nsResponse.status} - ${responseText}`);
+      const errText = await nsResponse.text();
+      console.error("❌ NetSuite responded with status", nsResponse.status);
+      console.error("🧾 Response body:", errText);
+      throw new Error(`NetSuite error: ${nsResponse.status} - ${errText}`);
     }
 
-    const nsResult = JSON.parse(responseText);
-    console.log('NetSuite response JSON:', nsResult);
+    const nsResult = await nsResponse.json();
+    console.log("✅ NetSuite response:", JSON.stringify(nsResult, null, 2));
     res.status(200).json(nsResult);
   } catch (error) {
-    console.error('Error proxying request:', error);
+    console.error("💥 Error proxying request:", error);
     res.status(500).json({ message: 'Internal Server Error', error: error.message });
   }
 }
