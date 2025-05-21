@@ -13,9 +13,9 @@ const RESTLET_DEPLOY_ID = process.env.RESTLET_DEPLOY_ID;
 
 const oauth = new OAuth({
   consumer: { key: CONSUMER_KEY, secret: CONSUMER_SECRET },
-  signature_method: 'HMAC-SHA1',
+  signature_method: 'HMAC-SHA256',
   hash_function(base_string, key) {
-    return crypto.createHmac('sha1', key).update(base_string).digest('base64');
+    return crypto.createHmac('sha256', key).update(base_string).digest('base64');
   },
 });
 
