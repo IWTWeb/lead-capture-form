@@ -38,7 +38,7 @@ export default async function handler(req, res) {
   console.log("📦 Request body:", JSON.stringify(req.body, null, 2));
 
   try {
-    const requestUrl = `https://${NETSUITE_ACCOUNT.toLowerCase()}.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=${RESTLET_SCRIPT_ID}&deploy=${RESTLET_DEPLOY_ID}`;
+    const requestUrl = `https://${NETSUITE_ACCOUNT.toLowerCase()}.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=${RESTLET_SCRIPT_ID}&deploy=${RESTLET_DEPLOY_ID}&compid=1292472`;
     console.log("🌐 NetSuite RESTlet URL:", requestUrl);
 
     const request_data = {
