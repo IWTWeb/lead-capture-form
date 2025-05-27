@@ -10,6 +10,10 @@ const TOKEN_SECRET = process.env.TOKEN_SECRET;
 const RESTLET_SCRIPT_ID = process.env.RESTLET_SCRIPT_ID;
 const RESTLET_DEPLOY_ID = process.env.RESTLET_DEPLOY_ID;
 
+function printHex(label, value) {
+  console.log(`${label}:`, Buffer.from(value || '', 'utf8').toString('hex'));
+}
+
 // Initialize OAuth
 const oauth = new OAuth({
   consumer: { key: CONSUMER_KEY, secret: CONSUMER_SECRET },
@@ -37,14 +41,24 @@ export default async function handler(req, res) {
   console.log("🔍 Incoming request method:", req.method);
   console.log("📦 Request body:", JSON.stringify(req.body, null, 2));
 
+  // Print hex-encoded env values for debugging
+  console.log('🔐 Hex-encoded env variables:');
+  printHex('NETSUITE_ACCOUNT', NETSUITE_ACCOUNT);
+  printHex('CONSUMER_KEY', CONSUMER_KEY);
+  printHex('CONSUMER_SECRET', CONSUMER_SECRET);
+  printHex('TOKEN_ID', TOKEN_ID);
+  printHex('TOKEN_SECRET', TOKEN_SECRET);
+  printHex('RESTLET_SCRIPT_ID', RESTLET_SCRIPT_ID);
+  printHex('RESTLET_DEPLOY_ID', RESTLET_DEPLOY_ID);
+
   try {
     const requestUrl = `https://${NETSUITE_ACCOUNT.toLowerCase()}.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=${RESTLET_SCRIPT_ID}&deploy=${RESTLET_DEPLOY_ID}&compid=${NETSUITE_ACCOUNT}`;
     console.log("🌐 NetSuite RESTlet URL:", requestUrl);
 
-    const requestData = {
+    const request_data = {
       url: requestUrl,
       method: 'POST',
-      data: {}, // IMPORTANT: use empty object when sending raw JSON body
+      data: req.body,
     };
 
     const token = {
@@ -52,24 +66,21 @@ export default async function handler(req, res) {
       secret: TOKEN_SECRET,
     };
 
-    const oauthParams = oauth.authorize(requestData, token);
-    let headers = oauth.toHeader(oauthParams);
-
-    // Add realm to match Postman
-    headers.Authorization = `OAuth realm="${NETSUITE_ACCOUNT}", ` + headers.Authorization.slice(6);
+    const oauthData = oauth.authorize(request_data, token);
+    const headers = oauth.toHeader(oauthData);
+    headers['Authorization'] = `OAuth realm="${NETSUITE_ACCOUNT}", ${headers['Authorization'].replace(/^OAuth\s/, '')}`;
     headers['Content-Type'] = 'application/json';
 
     console.log("📤 OAuth headers:", headers);
 
     console.log("🚀 Sending request to NetSuite...");
-    const nsResponse = await fetch(requestUrl, {
+    const nsResponse = await fetch(request_data.url, {
       method: 'POST',
       headers,
       body: JSON.stringify(req.body),
     });
 
     console.log("📥 Received response from NetSuite");
-
     if (!nsResponse.ok) {
       const errText = await nsResponse.text();
       console.error("❌ NetSuite responded with status", nsResponse.status);
