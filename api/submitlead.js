@@ -10,7 +10,7 @@ const TOKEN_SECRET = process.env.TOKEN_SECRET;
 const RESTLET_SCRIPT_ID = process.env.RESTLET_SCRIPT_ID;
 const RESTLET_DEPLOY_ID = process.env.RESTLET_DEPLOY_ID;
 
-// Initialize OAuth 1.0a with HMAC-SHA256
+// Initialize OAuth
 const oauth = new OAuth({
   consumer: { key: CONSUMER_KEY, secret: CONSUMER_SECRET },
   signature_method: 'HMAC-SHA256',
@@ -20,7 +20,6 @@ const oauth = new OAuth({
 });
 
 export default async function handler(req, res) {
-  // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -29,89 +28,95 @@ export default async function handler(req, res) {
     res.status(200).end();
     return;
   }
+
   if (req.method !== 'POST') {
     res.status(405).json({ message: 'Method Not Allowed' });
     return;
   }
 
-  console.log("🔍 Incoming request method:", req.method);
-  console.log("📦 Request body:", JSON.stringify(req.body, null, 2));
-
   try {
-    // Construct RESTlet URL (NetSuite account ID must be lowercase)
-    const requestUrl = `https://${NETSUITE_ACCOUNT.toLowerCase()}.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=${RESTLET_SCRIPT_ID}&deploy=${RESTLET_DEPLOY_ID}&compid=${NETSUITE_ACCOUNT}`;
-    console.log("🌐 NetSuite RESTlet URL:", requestUrl);
+    // Build URL with required query parameters (script, deploy, compid)
+    const baseUrl = `https://${NETSUITE_ACCOUNT.toLowerCase()}.restlets.api.netsuite.com/app/site/hosting/restlet.nl`;
+    const urlParams = new URLSearchParams({
+      script: RESTLET_SCRIPT_ID,
+      deploy: RESTLET_DEPLOY_ID,
+      compid: NETSUITE_ACCOUNT,
+    });
+    const requestUrl = `${baseUrl}?${urlParams.toString()}`;
 
-    // Prepare OAuth parameters (timestamp and nonce)
     const oauthTimestamp = Math.floor(Date.now() / 1000);
     const oauthNonce = crypto.randomBytes(16).toString('hex');
 
-    console.log("🔑 Auth Values:");
-    console.log("  - Account:", NETSUITE_ACCOUNT);
-    console.log("  - Consumer Key:", CONSUMER_KEY);
-    console.log("  - Consumer Secret:", CONSUMER_SECRET ? '✅ (set)' : '❌ (missing)');
-    console.log("  - Token ID:", TOKEN_ID);
-    console.log("  - Token Secret:", TOKEN_SECRET ? '✅ (set)' : '❌ (missing)');
-    console.log("🕒 Timestamp Debug:");
-    console.log("  - oauth_timestamp:", oauthTimestamp);
-    console.log("  - Local Time:", new Date(oauthTimestamp * 1000).toLocaleString());
-    console.log("  - UTC Time:", new Date(oauthTimestamp * 1000).toUTCString());
-    console.log("🌀 Using oauth_nonce:", oauthNonce);
-
-    // The data to send (will be included in signature base string)
-    const request_data = {
-      url: requestUrl,
-      method: 'POST',
-      data: req.body,
-    };
-
-    // Prepare OAuth parameters for signature
-    const oauthParams = {
+    // Prepare all parameters for signing:
+    // This includes query parameters + OAuth params + (optionally) body parameters
+    // NetSuite expects the body parameters included in the signature base string
+    // But they are NOT included in the Authorization header
+    const allParams = {
+      // Query params
+      script: RESTLET_SCRIPT_ID,
+      deploy: RESTLET_DEPLOY_ID,
+      compid: NETSUITE_ACCOUNT,
+      // OAuth params (without signature yet)
       oauth_consumer_key: CONSUMER_KEY,
       oauth_token: TOKEN_ID,
       oauth_nonce: oauthNonce,
       oauth_timestamp: oauthTimestamp.toString(),
       oauth_signature_method: 'HMAC-SHA256',
       oauth_version: '1.0',
+      // Add body parameters flattened here (assumes flat object)
+      ...req.body,
     };
 
-    // Generate OAuth signature
-    oauthParams.oauth_signature = oauth.getSignature(request_data, TOKEN_SECRET, oauthParams);
+    // Build request data object for oauth-1.0a
+    const request_data = {
+      url: baseUrl,
+      method: 'POST',
+      data: allParams,
+    };
 
-    // Format OAuth Authorization header (key/value pairs quoted, comma separated)
-    const authHeader = Object.entries(oauthParams)
-      .map(([key, val]) => `${key}="${encodeURIComponent(val)}"`)
-      .join(', ');
+    // Generate oauth_signature
+    const oauth_signature = oauth.getSignature(request_data, TOKEN_SECRET, CONSUMER_SECRET);
 
+    // Build OAuth-only params for Authorization header (exclude body and query params)
+    const oauthHeaderParams = {
+      oauth_consumer_key: CONSUMER_KEY,
+      oauth_token: TOKEN_ID,
+      oauth_nonce: oauthNonce,
+      oauth_timestamp: oauthTimestamp.toString(),
+      oauth_signature_method: 'HMAC-SHA256',
+      oauth_version: '1.0',
+      oauth_signature,
+    };
+
+    // Format Authorization header string per OAuth 1.0 spec
+    const authHeader =
+      'OAuth ' +
+      Object.entries(oauthHeaderParams)
+        .map(([k, v]) => `${k}="${encodeURIComponent(v)}"`)
+        .join(', ');
+
+    // Prepare headers
     const headers = {
-      Authorization: `OAuth ${authHeader}`,
+      Authorization: authHeader,
       'Content-Type': 'application/json',
     };
 
-    console.log("📤 OAuth headers:", headers);
-
-    // Send POST request to NetSuite RESTlet with JSON body and OAuth header
-    console.log("🚀 Sending request to NetSuite...");
-    const nsResponse = await fetch(request_data.url, {
+    // Send POST with JSON body (req.body only) and proper OAuth header
+    const nsResponse = await fetch(requestUrl, {
       method: 'POST',
       headers,
       body: JSON.stringify(req.body),
     });
 
-    console.log("📥 Received response from NetSuite");
-
     if (!nsResponse.ok) {
       const errText = await nsResponse.text();
-      console.error("❌ NetSuite responded with status", nsResponse.status);
-      console.error("🧾 Response body:", errText);
       throw new Error(`NetSuite error: ${nsResponse.status} - ${errText}`);
     }
 
     const nsResult = await nsResponse.json();
-    console.log("✅ NetSuite response:", JSON.stringify(nsResult, null, 2));
     res.status(200).json(nsResult);
   } catch (error) {
-    console.error("💥 Error proxying request:", error);
+    console.error('💥 Error proxying request:', error);
     res.status(500).json({ message: 'Internal Server Error', error: error.message });
   }
 }
