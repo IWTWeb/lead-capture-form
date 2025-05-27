@@ -7,10 +7,10 @@ const CONSUMER_KEY = process.env.CONSUMER_KEY;
 const CONSUMER_SECRET = process.env.CONSUMER_SECRET;
 const TOKEN_ID = process.env.TOKEN_ID;
 const TOKEN_SECRET = process.env.TOKEN_SECRET;
-
 const RESTLET_SCRIPT_ID = process.env.RESTLET_SCRIPT_ID;
 const RESTLET_DEPLOY_ID = process.env.RESTLET_DEPLOY_ID;
 
+// Initialize OAuth
 const oauth = new OAuth({
   consumer: { key: CONSUMER_KEY, secret: CONSUMER_SECRET },
   signature_method: 'HMAC-SHA256',
@@ -41,27 +41,8 @@ export default async function handler(req, res) {
     const requestUrl = `https://${NETSUITE_ACCOUNT.toLowerCase()}.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=${RESTLET_SCRIPT_ID}&deploy=${RESTLET_DEPLOY_ID}&compid=${NETSUITE_ACCOUNT}`;
     console.log("🌐 NetSuite RESTlet URL:", requestUrl);
 
-    const request_data = {
-      url: requestUrl,
-      method: 'POST',
-      data: req.body,
-    };
-
-    const token = {
-      key: TOKEN_ID,
-      secret: TOKEN_SECRET,
-    };
-
     const oauthTimestamp = Math.floor(Date.now() / 1000);
     const oauthNonce = crypto.randomBytes(16).toString('hex');
-
-    const oauthParams = oauth.authorize(request_data, token, {
-      oauth_timestamp: oauthTimestamp,
-      oauth_nonce: oauthNonce,
-    });
-
-    const headers = oauth.toHeader(oauthParams);
-    headers['Content-Type'] = 'application/json';
 
     console.log("🔑 Auth Values:");
     console.log("  - Account:", NETSUITE_ACCOUNT);
@@ -69,14 +50,32 @@ export default async function handler(req, res) {
     console.log("  - Consumer Secret:", CONSUMER_SECRET ? '✅ (set)' : '❌ (missing)');
     console.log("  - Token ID:", TOKEN_ID);
     console.log("  - Token Secret:", TOKEN_SECRET ? '✅ (set)' : '❌ (missing)');
-
     console.log("🕒 Timestamp Debug:");
     console.log("  - oauth_timestamp:", oauthTimestamp);
     console.log("  - Local Time:", new Date(oauthTimestamp * 1000).toLocaleString());
     console.log("  - UTC Time:", new Date(oauthTimestamp * 1000).toUTCString());
-
     console.log("🌀 Using oauth_nonce:", oauthNonce);
-    console.log("🔐 Generating OAuth header...");
+
+    const request_data = {
+      url: requestUrl,
+      method: 'POST',
+      data: req.body,
+    };
+
+    const oauthParams = {
+      oauth_consumer_key: CONSUMER_KEY,
+      oauth_token: TOKEN_ID,
+      oauth_nonce: oauthNonce,
+      oauth_timestamp: oauthTimestamp.toString(),
+      oauth_signature_method: 'HMAC-SHA256',
+      oauth_version: '1.0',
+    };
+
+    oauthParams.oauth_signature = oauth.getSignature(request_data, TOKEN_SECRET, oauthParams);
+
+    const headers = oauth.toHeader(oauthParams);
+    headers['Content-Type'] = 'application/json';
+
     console.log("📤 OAuth headers:", headers);
 
     console.log("🚀 Sending request to NetSuite...");
