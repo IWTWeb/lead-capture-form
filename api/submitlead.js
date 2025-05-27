@@ -11,18 +11,12 @@ const TOKEN_SECRET = process.env.TOKEN_SECRET;
 const RESTLET_SCRIPT_ID = process.env.RESTLET_SCRIPT_ID;
 const RESTLET_DEPLOY_ID = process.env.RESTLET_DEPLOY_ID;
 
-// Capture timestamp before signature
-const oauthTimestamp = Math.floor(Date.now() / 1000);
-
 const oauth = new OAuth({
   consumer: { key: CONSUMER_KEY, secret: CONSUMER_SECRET },
   signature_method: 'HMAC-SHA256',
   hash_function(base_string, key) {
     return crypto.createHmac('sha256', key).update(base_string).digest('base64');
   },
-  nonce_length: 32,
-  parameter_seperator: ', ',
-  version: '1.0',
 });
 
 export default async function handler(req, res) {
@@ -58,6 +52,17 @@ export default async function handler(req, res) {
       secret: TOKEN_SECRET,
     };
 
+    const oauthTimestamp = Math.floor(Date.now() / 1000);
+    const oauthNonce = crypto.randomBytes(16).toString('hex');
+
+    const oauthParams = oauth.authorize(request_data, token, {
+      oauth_timestamp: oauthTimestamp,
+      oauth_nonce: oauthNonce,
+    });
+
+    const headers = oauth.toHeader(oauthParams);
+    headers['Content-Type'] = 'application/json';
+
     console.log("🔑 Auth Values:");
     console.log("  - Account:", NETSUITE_ACCOUNT);
     console.log("  - Consumer Key:", CONSUMER_KEY);
@@ -67,13 +72,11 @@ export default async function handler(req, res) {
 
     console.log("🕒 Timestamp Debug:");
     console.log("  - oauth_timestamp:", oauthTimestamp);
-    console.log("  - Local Time:", new Date().toLocaleString());
-    console.log("  - UTC Time:", new Date().toUTCString());
+    console.log("  - Local Time:", new Date(oauthTimestamp * 1000).toLocaleString());
+    console.log("  - UTC Time:", new Date(oauthTimestamp * 1000).toUTCString());
 
+    console.log("🌀 Using oauth_nonce:", oauthNonce);
     console.log("🔐 Generating OAuth header...");
-    const headers = oauth.toHeader(oauth.authorize(request_data, token));
-    headers['Content-Type'] = 'application/json';
-
     console.log("📤 OAuth headers:", headers);
 
     console.log("🚀 Sending request to NetSuite...");
