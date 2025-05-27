@@ -11,12 +11,18 @@ const TOKEN_SECRET = process.env.TOKEN_SECRET;
 const RESTLET_SCRIPT_ID = process.env.RESTLET_SCRIPT_ID;
 const RESTLET_DEPLOY_ID = process.env.RESTLET_DEPLOY_ID;
 
+// Capture timestamp before signature
+const oauthTimestamp = Math.floor(Date.now() / 1000);
+
 const oauth = new OAuth({
   consumer: { key: CONSUMER_KEY, secret: CONSUMER_SECRET },
   signature_method: 'HMAC-SHA256',
   hash_function(base_string, key) {
     return crypto.createHmac('sha256', key).update(base_string).digest('base64');
   },
+  nonce_length: 32,
+  parameter_seperator: ', ',
+  version: '1.0',
 });
 
 export default async function handler(req, res) {
@@ -38,7 +44,7 @@ export default async function handler(req, res) {
   console.log("📦 Request body:", JSON.stringify(req.body, null, 2));
 
   try {
-    const requestUrl = `https://${NETSUITE_ACCOUNT.toLowerCase()}.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=${RESTLET_SCRIPT_ID}&deploy=${RESTLET_DEPLOY_ID}&compid=1292472`;
+    const requestUrl = `https://${NETSUITE_ACCOUNT.toLowerCase()}.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=${RESTLET_SCRIPT_ID}&deploy=${RESTLET_DEPLOY_ID}&compid=${NETSUITE_ACCOUNT}`;
     console.log("🌐 NetSuite RESTlet URL:", requestUrl);
 
     const request_data = {
@@ -58,6 +64,11 @@ export default async function handler(req, res) {
     console.log("  - Consumer Secret:", CONSUMER_SECRET ? '✅ (set)' : '❌ (missing)');
     console.log("  - Token ID:", TOKEN_ID);
     console.log("  - Token Secret:", TOKEN_SECRET ? '✅ (set)' : '❌ (missing)');
+
+    console.log("🕒 Timestamp Debug:");
+    console.log("  - oauth_timestamp:", oauthTimestamp);
+    console.log("  - Local Time:", new Date().toLocaleString());
+    console.log("  - UTC Time:", new Date().toUTCString());
 
     console.log("🔐 Generating OAuth header...");
     const headers = oauth.toHeader(oauth.authorize(request_data, token));
