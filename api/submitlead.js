@@ -10,7 +10,7 @@ const TOKEN_SECRET = process.env.TOKEN_SECRET;
 const RESTLET_SCRIPT_ID = process.env.RESTLET_SCRIPT_ID;
 const RESTLET_DEPLOY_ID = process.env.RESTLET_DEPLOY_ID;
 
-// Initialize OAuth
+// Initialize OAuth 1.0a with HMAC-SHA256
 const oauth = new OAuth({
   consumer: { key: CONSUMER_KEY, secret: CONSUMER_SECRET },
   signature_method: 'HMAC-SHA256',
@@ -20,6 +20,7 @@ const oauth = new OAuth({
 });
 
 export default async function handler(req, res) {
+  // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -28,7 +29,6 @@ export default async function handler(req, res) {
     res.status(200).end();
     return;
   }
-
   if (req.method !== 'POST') {
     res.status(405).json({ message: 'Method Not Allowed' });
     return;
@@ -38,9 +38,11 @@ export default async function handler(req, res) {
   console.log("📦 Request body:", JSON.stringify(req.body, null, 2));
 
   try {
+    // Construct RESTlet URL (NetSuite account ID must be lowercase)
     const requestUrl = `https://${NETSUITE_ACCOUNT.toLowerCase()}.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=${RESTLET_SCRIPT_ID}&deploy=${RESTLET_DEPLOY_ID}&compid=${NETSUITE_ACCOUNT}`;
     console.log("🌐 NetSuite RESTlet URL:", requestUrl);
 
+    // Prepare OAuth parameters (timestamp and nonce)
     const oauthTimestamp = Math.floor(Date.now() / 1000);
     const oauthNonce = crypto.randomBytes(16).toString('hex');
 
@@ -56,12 +58,14 @@ export default async function handler(req, res) {
     console.log("  - UTC Time:", new Date(oauthTimestamp * 1000).toUTCString());
     console.log("🌀 Using oauth_nonce:", oauthNonce);
 
+    // The data to send (will be included in signature base string)
     const request_data = {
       url: requestUrl,
       method: 'POST',
       data: req.body,
     };
 
+    // Prepare OAuth parameters for signature
     const oauthParams = {
       oauth_consumer_key: CONSUMER_KEY,
       oauth_token: TOKEN_ID,
@@ -71,13 +75,22 @@ export default async function handler(req, res) {
       oauth_version: '1.0',
     };
 
+    // Generate OAuth signature
     oauthParams.oauth_signature = oauth.getSignature(request_data, TOKEN_SECRET, oauthParams);
 
-    const headers = oauth.toHeader(oauthParams);
-    headers['Content-Type'] = 'application/json';
+    // Format OAuth Authorization header (key/value pairs quoted, comma separated)
+    const authHeader = Object.entries(oauthParams)
+      .map(([key, val]) => `${key}="${encodeURIComponent(val)}"`)
+      .join(', ');
+
+    const headers = {
+      Authorization: `OAuth ${authHeader}`,
+      'Content-Type': 'application/json',
+    };
 
     console.log("📤 OAuth headers:", headers);
 
+    // Send POST request to NetSuite RESTlet with JSON body and OAuth header
     console.log("🚀 Sending request to NetSuite...");
     const nsResponse = await fetch(request_data.url, {
       method: 'POST',
@@ -86,6 +99,7 @@ export default async function handler(req, res) {
     });
 
     console.log("📥 Received response from NetSuite");
+
     if (!nsResponse.ok) {
       const errText = await nsResponse.text();
       console.error("❌ NetSuite responded with status", nsResponse.status);
