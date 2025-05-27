@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import OAuth from 'oauth-1.0a';
 import fetch from 'node-fetch';
 
+// Environment variables from Vercel
 const NETSUITE_ACCOUNT = process.env.NETSUITE_ACCOUNT;
 const CONSUMER_KEY = process.env.CONSUMER_KEY;
 const CONSUMER_SECRET = process.env.CONSUMER_SECRET;
@@ -34,89 +35,67 @@ export default async function handler(req, res) {
     return;
   }
 
+  console.log("🔍 Incoming request method:", req.method);
+  console.log("📦 Request body:", JSON.stringify(req.body, null, 2));
+
   try {
-    // Build URL with required query parameters (script, deploy, compid)
-    const baseUrl = `https://${NETSUITE_ACCOUNT.toLowerCase()}.restlets.api.netsuite.com/app/site/hosting/restlet.nl`;
-    const urlParams = new URLSearchParams({
-      script: RESTLET_SCRIPT_ID,
-      deploy: RESTLET_DEPLOY_ID,
-      compid: NETSUITE_ACCOUNT,
-    });
-    const requestUrl = `${baseUrl}?${urlParams.toString()}`;
+    const url = `https://${NETSUITE_ACCOUNT.toLowerCase()}.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=${RESTLET_SCRIPT_ID}&deploy=${RESTLET_DEPLOY_ID}&compid=${NETSUITE_ACCOUNT}`;
+    console.log("🌐 NetSuite RESTlet URL:", url);
 
-    const oauthTimestamp = Math.floor(Date.now() / 1000);
-    const oauthNonce = crypto.randomBytes(16).toString('hex');
+    const oauth_timestamp = Math.floor(Date.now() / 1000).toString();
+    const oauth_nonce = crypto.randomBytes(16).toString('hex');
 
-    // Prepare all parameters for signing:
-    // This includes query parameters + OAuth params + (optionally) body parameters
-    // NetSuite expects the body parameters included in the signature base string
-    // But they are NOT included in the Authorization header
-    const allParams = {
-      // Query params
-      script: RESTLET_SCRIPT_ID,
-      deploy: RESTLET_DEPLOY_ID,
-      compid: NETSUITE_ACCOUNT,
-      // OAuth params (without signature yet)
-      oauth_consumer_key: CONSUMER_KEY,
-      oauth_token: TOKEN_ID,
-      oauth_nonce: oauthNonce,
-      oauth_timestamp: oauthTimestamp.toString(),
-      oauth_signature_method: 'HMAC-SHA256',
-      oauth_version: '1.0',
-      // Add body parameters flattened here (assumes flat object)
-      ...req.body,
-    };
+    console.log("🔑 Auth Values:");
+    console.log("  - Account:", NETSUITE_ACCOUNT);
+    console.log("  - Consumer Key:", CONSUMER_KEY);
+    console.log("  - Token ID:", TOKEN_ID);
+    console.log("🕒 Timestamp Debug:");
+    console.log("  - oauth_timestamp:", oauth_timestamp);
+    console.log("  - Local Time:", new Date(Number(oauth_timestamp) * 1000).toLocaleString());
+    console.log("  - UTC Time:", new Date(Number(oauth_timestamp) * 1000).toUTCString());
+    console.log("🌀 Using oauth_nonce:", oauth_nonce);
 
-    // Build request data object for oauth-1.0a
     const request_data = {
-      url: baseUrl,
+      url,
       method: 'POST',
-      data: allParams,
     };
 
-    // Generate oauth_signature
-    const oauth_signature = oauth.getSignature(request_data, TOKEN_SECRET, CONSUMER_SECRET);
+    const token = { key: TOKEN_ID, secret: TOKEN_SECRET };
+    const oauthData = oauth.authorize(request_data, token);
 
-    // Build OAuth-only params for Authorization header (exclude body and query params)
-    const oauthHeaderParams = {
-      oauth_consumer_key: CONSUMER_KEY,
-      oauth_token: TOKEN_ID,
-      oauth_nonce: oauthNonce,
-      oauth_timestamp: oauthTimestamp.toString(),
-      oauth_signature_method: 'HMAC-SHA256',
-      oauth_version: '1.0',
-      oauth_signature,
-    };
+    let authHeader = oauth.toHeader(oauthData);
+    authHeader.Authorization = `OAuth realm="${NETSUITE_ACCOUNT}", ` + authHeader.Authorization.slice(6);
 
-    // Format Authorization header string per OAuth 1.0 spec
-    const authHeader =
-      'OAuth ' +
-      Object.entries(oauthHeaderParams)
-        .map(([k, v]) => `${k}="${encodeURIComponent(v)}"`)
-        .join(', ');
-
-    // Prepare headers
     const headers = {
-      Authorization: authHeader,
+      ...authHeader,
       'Content-Type': 'application/json',
     };
 
-    // Send POST with JSON body (req.body only) and proper OAuth header
-    const nsResponse = await fetch(requestUrl, {
+    console.log("📤 OAuth headers:", headers);
+
+    console.log("🚀 Sending request to NetSuite...");
+    const nsResponse = await fetch(url, {
       method: 'POST',
       headers,
       body: JSON.stringify(req.body),
     });
 
+    console.log("📥 Received response from NetSuite");
+
+    const text = await nsResponse.text();
+
     if (!nsResponse.ok) {
-      const errText = await nsResponse.text();
-      throw new Error(`NetSuite error: ${nsResponse.status} - ${errText}`);
+      console.error("❌ NetSuite responded with status", nsResponse.status);
+      console.error("🧾 Response body:", text);
+      throw new Error(`NetSuite error: ${nsResponse.status} - ${text}`);
     }
 
-    const nsResult = await nsResponse.json();
-    res.status(200).json(nsResult);
+    const json = JSON.parse(text);
+    console.log("✅ NetSuite response:", JSON.stringify(json, null, 2));
+    res.status(200).json(json);
+
   } catch (error) {
-    console.error('💥 Error proxying request:', error);
+    console.error("💥 Error proxying request:", error);
     res.status(500).json({ message: 'Internal Server Error', error: error.message });
   }
 }
