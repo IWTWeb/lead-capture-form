@@ -10,7 +10,7 @@ const TOKEN_SECRET = process.env.TOKEN_SECRET;
 const RESTLET_SCRIPT_ID = process.env.RESTLET_SCRIPT_ID;
 const RESTLET_DEPLOY_ID = process.env.RESTLET_DEPLOY_ID;
 
-// Initialize OAuth 1.0a
+// Initialize OAuth
 const oauth = new OAuth({
   consumer: { key: CONSUMER_KEY, secret: CONSUMER_SECRET },
   signature_method: 'HMAC-SHA256',
@@ -41,9 +41,10 @@ export default async function handler(req, res) {
     const requestUrl = `https://${NETSUITE_ACCOUNT.toLowerCase()}.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=${RESTLET_SCRIPT_ID}&deploy=${RESTLET_DEPLOY_ID}&compid=${NETSUITE_ACCOUNT}`;
     console.log("🌐 NetSuite RESTlet URL:", requestUrl);
 
-    const request_data = {
+    const requestData = {
       url: requestUrl,
       method: 'POST',
+      data: {}, // IMPORTANT: use empty object when sending raw JSON body
     };
 
     const token = {
@@ -51,12 +52,11 @@ export default async function handler(req, res) {
       secret: TOKEN_SECRET,
     };
 
-    const oauthParams = oauth.authorize(request_data, token);
+    const oauthParams = oauth.authorize(requestData, token);
     let headers = oauth.toHeader(oauthParams);
 
-    // Add realm manually to match Postman
+    // Add realm to match Postman
     headers.Authorization = `OAuth realm="${NETSUITE_ACCOUNT}", ` + headers.Authorization.slice(6);
-
     headers['Content-Type'] = 'application/json';
 
     console.log("📤 OAuth headers:", headers);
@@ -68,16 +68,16 @@ export default async function handler(req, res) {
       body: JSON.stringify(req.body),
     });
 
-    const responseText = await nsResponse.text();
-
     console.log("📥 Received response from NetSuite");
+
     if (!nsResponse.ok) {
+      const errText = await nsResponse.text();
       console.error("❌ NetSuite responded with status", nsResponse.status);
-      console.error("🧾 Response body:", responseText);
-      throw new Error(`NetSuite error: ${nsResponse.status} - ${responseText}`);
+      console.error("🧾 Response body:", errText);
+      throw new Error(`NetSuite error: ${nsResponse.status} - ${errText}`);
     }
 
-    const nsResult = JSON.parse(responseText);
+    const nsResult = await nsResponse.json();
     console.log("✅ NetSuite response:", JSON.stringify(nsResult, null, 2));
     res.status(200).json(nsResult);
   } catch (error) {
